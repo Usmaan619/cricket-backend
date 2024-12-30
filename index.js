@@ -3,6 +3,7 @@ const axios = require("axios");
 const cheerio = require('cheerio');
 const puppeteer = require('puppeteer');
 const mongoose = require('mongoose'); // Import Mongoose
+require('dotenv').config()
 
 const app = express();
 app.use(express.json({
@@ -23,7 +24,7 @@ const io = new Server(server, {
 });
 
 // Connect to MongoDB
-mongoose.connect('mongodb+srv://usmanhasan619:pdRTGbtSUAPZHwCz@cluster0.g8htb67.mongodb.net/Task-management?retryWrites=true&w=majority&appName=Cluster0', { // Replace 'yourdbname' with your actual database name
+mongoose.connect(process.env.MONGO_URI, { // Replace 'yourdbname' with your actual database name
   // useNewUrlParser: true,
   // useUnifiedTopology: true,
 }).then(() => {
@@ -51,7 +52,7 @@ io.on("connection", (socket) => {
   socket.emit("skill", { back: "Testing websocket" });
 });
 
-const apiKey = "43526faba31aea44d5da1e6a9c7fac66"
+const apiKey = process.env.API_KEY
 
 
 // Function to fetch match data
@@ -196,54 +197,109 @@ const fetchPlayersByTeamId = async (teamId) => {
 // API endpoint to get both live and upcoming matches
 app.get('/api/matches', async (req, res) => {
   try {
+    // Utility function to process a single match
+    // const processMatch = async (match, type) => {
+    //   const matchId = match.matchInfo?.matchId;
+    //   if (!matchId) return null;
+
+    //   const team1Image = await fetchImageById(match?.matchInfo?.team1?.imageId);
+    //   const team2Image = await fetchImageById(match?.matchInfo?.team2?.imageId);
+    //   
+    //   
+
+    //   try {
+    //     const singleData = await fetchMatchScoreById(matchId);
+    //     
+
+    //     // Save match data to MongoDB
+    //     const matchData = new Match({ matchId, type });
+    //     await matchData.save();
+
+    //     return singleData;
+    //   } catch (error) {
+    //     
+    //     return null;
+    //   }
+    // };
+
+    const processMatch = async (match, type) => {
+      const matchId = match.matchInfo?.matchId;
+      if (!matchId) return null;
+
+      
+
+
+      try {
+        const singleData = await fetchMatchScoreById(matchId);
+
+        
+
+        // Add images to singleData
+
+
+
+        // Save match data to MongoDB
+        const matchData = new Match({
+          matchId,
+          type,
+          // data: enrichedData, // Save enriched data
+        });
+        await matchData.save();
+
+        const team1Image = await fetchImageById(match?.matchInfo?.team1?.imageId);
+        const team2Image = await fetchImageById(match?.matchInfo?.team2?.imageId);
+        const enrichedData = {
+          ...singleData,
+          team1Image,
+          team2Image,
+        };
+
+        return enrichedData; // Return enriched data
+      } catch (error) {
+        
+        return null;
+      }
+    };
+
+
+
+
+
+
     // Function to extract match IDs and fetch live match scores
     const extractMatchData = async (matches, type) => {
       const matchIds = [];
       const matchDataLive = [];
 
-
       for (const matchType of matches) {
         if (matchType.seriesMatches) {
           for (const series of matchType.seriesMatches) {
-            if (series.seriesAdWrapper && series.seriesAdWrapper.matches) {
+            if (series.seriesAdWrapper?.matches) {
               for (const match of series.seriesAdWrapper.matches) {
-                const matchId = match.matchInfo?.matchId;
-                if (matchId) {
-                  matchIds.push(matchId);
-                  try {
-                    const singleData = await fetchMatchScoreById(matchId);
-
-                    matchDataLive.push(singleData);
-
-                    // Save match data to MongoDB
-                    const matchData = new Match({ matchId, type });
-                    await matchData.save();
-
-                  } catch (err) {
-
-                  }
+                const processedMatch = await processMatch(match, type);
+                if (processedMatch) {
+                  matchIds.push(match.matchInfo.matchId);
+                  matchDataLive.push(processedMatch);
+                  
                 }
               }
             }
           }
         }
       }
+
       return { matchIds, matchDataLive };
     };
 
     // Fetch live matches and process them
     const liveMatches = await fetchMatchData('live');
-
-
     const { matchIds, matchDataLive } = await extractMatchData(liveMatches, 'live');
-
-    // Log extracted match IDs
-
+    
 
     // Respond with match data
     res.json({ matchDataLive });
   } catch (error) {
-
+    
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
@@ -266,7 +322,7 @@ app.get('/api/matches/info', async (req, res) => {
 
     res.json({ data: matchData });
   } catch (error) {
-    console.log('error: ', error);
+    
 
     res.status(500).json({ error: 'Internal Server Error' });
   }
@@ -367,7 +423,7 @@ app.get('/api/matches/teamByIds', async (req, res) => {
 
     res.json({ data: responseData });
   } catch (error) {
-    console.error("Error fetching match data:", error);
+    
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
@@ -385,7 +441,7 @@ app.get('/api/matches/getTeamsById', async (req, res) => {
     }
 
     const playersData = await fetchPlayersByTeamId(teamId);
-    console.log('playersData: ', playersData);
+    
 
 
 
@@ -412,7 +468,7 @@ app.get('/api/matches/getTeamsById', async (req, res) => {
 
     res.json({ data: players });
   } catch (error) {
-    console.error("Error fetching match data:", error);
+    
     res.status(500).json({ error: "Internal Server Error" });
   }
 
